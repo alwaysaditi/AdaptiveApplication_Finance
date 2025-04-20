@@ -26,7 +26,7 @@
                         <li class="active"><a href="#"><i class="fas fa-home"></i> Dashboard</a></li>
                         <li><a href="#"><i class="fas fa-wallet"></i> Transactions</a></li>
                         <li><a href="#"><i class="fas fa-chart-line"></i> Analytics</a></li>
-                        <li><a href="#"><i class="fas fa-bullseye"></i> Goals</a></li>
+                        <li><a href="#" id="charityBtn"><i class="fas fa-hand-holding-heart"></i> Charity</a></li>
                         <li><a href="#"><i class="fas fa-cog"></i> Settings</a></li>
                     </ul>
                 </nav>
@@ -59,26 +59,33 @@
                 <div class="card-container">
                     <div class="card recent-transactions">
                         <h2><i class="fas fa-exchange-alt"></i> Recent Transactions</h2>
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Date</th>
-                                    <th>Description</th>
-                                    <th>Amount</th>
-                                    <th>Category</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for transaction in transactions %}
-                                <tr>
-                                    <td>{{ transaction.date }}</td>
-                                    <td>{{ transaction.description }}</td>
-                                    <td class="{{ 'expense' if transaction.amount > 0 else 'income' }}">${{ "%.2f"|format(transaction.amount) }}</td>
-                                    <td>{{ transaction.category }}</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                     <table>
+    <thead>
+        <tr>
+            <th>Date</th>
+            <th>Description</th>
+            <th>Amount</th>
+            <th>Category</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for transaction in transactions %}
+        <tr>
+            <td>{{ transaction.date }}</td>
+            <td>
+                {{ transaction.description }}
+                {% if transaction.category == 'Charity' %}
+                <br><small>({{ transaction.charity_category }})</small>
+                {% endif %}
+            </td>
+            <td class="{{ 'expense' if transaction.amount > 0 else 'income' }}">
+                ${{ "%.2f"|format(transaction.amount|abs) }}
+            </td>
+            <td>{{ transaction.category }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
                     </div>
 
                     <div class="card add-transaction">
@@ -146,6 +153,47 @@
             </div>
         </div>
     </div>
+
+
+<!-- Add this modal at the bottom with other modals -->
+<div id="charityModal" class="modal">
+    <div class="modal-content">
+        <span class="close-btn">&times;</span>
+        <h3><i class="fas fa-hand-holding-heart"></i> Make a Donation</h3>
+        <div id="charitySuggestion">
+            <p class="empty-state">Getting suggestion...</p>
+        </div>
+        <form id="charityForm">
+            <div class="form-group">
+                <label for="charityAmount">Amount ($)</label>
+                <input type="number" id="charityAmount" step="0.01" min="0" required>
+            </div>
+            <div class="form-group">
+                <label for="charityCategory">Category</label>
+                <select id="charityCategory" required>
+                    {% for category in charity_categories %}
+                    <option value="{{ category }}">{{ category }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group" id="reallocationGroup" style="display: none;">
+                <label for="reallocationCategory">Reallocate from</label>
+                <select id="reallocationCategory">
+                    {% for category in categories %}
+                    <option value="{{ category }}">{{ category }}</option>
+                    {% endfor %}
+                </select>
+                <p class="help-text">We'll move this amount from the selected budget category</p>
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="reallocateCheckbox"> Reallocate from existing budget
+                </label>
+            </div>
+            <button type="submit" class="btn-primary">Donate</button>
+        </form>
+    </div>
+</div>
 
     <script src="/static/js/script.js"></script>
 </body>
