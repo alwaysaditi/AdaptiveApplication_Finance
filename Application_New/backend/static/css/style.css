@@ -444,65 +444,70 @@ table th {
     }
 }
 
-/* [All your existing CSS remains the same...] */
 
-/* Add these new styles at the end */
+/* Add these to your CSS file */
 .charity-suggestion {
-    text-align: center;
-    padding: 20px;
-    margin-bottom: 20px;
-    background-color: #f8f9fa;
+    padding: 15px;
+    background-color: #f0f8ff;
     border-radius: 8px;
-}
-
-.suggested-amount {
-    font-size: 2.5rem;
-    font-weight: bold;
-    color: var(--primary);
-    margin: 15px 0;
-}
-
-.charity-note {
-    font-size: 0.8rem;
-    color: var(--gray);
-    font-style: italic;
-}
-
-.charity-form .form-group {
     margin-bottom: 20px;
+    border-left: 4px solid #ff69b4;
 }
 
-.charity-form label {
-    display: block;
-    margin-bottom: 8px;
-    font-weight: 500;
+.charity-suggestion p {
+    margin-bottom: 10px;
 }
 
-.charity-form input, 
-.charity-form select {
-    width: 100%;
-    padding: 12px;
-    border: 1px solid var(--gray-light);
-    border-radius: 5px;
-    font-family: inherit;
-}
-
-.charity-form button[type="submit"] {
-    width: 100%;
-    padding: 12px;
-    background-color: var(--danger);
+.btn-secondary {
+    background-color: #ff69b4;
     color: white;
     border: none;
+    padding: 8px 15px;
     border-radius: 5px;
-    font-size: 1rem;
     cursor: pointer;
+    font-family: inherit;
+    font-weight: 500;
     transition: background-color 0.3s;
+    margin-top: 10px;
 }
 
-.charity-form button[type="submit"]:hover {
-    background-color: #e5177b;
+.btn-secondary:hover {
+    background-color: #e64980;
 }
 
-.charity-form button[type="submit"] i {
-    margin-right: 8px;
+.help-text {
+    font-size: 0.8rem;
+    color: var(--gray);
+    margin-top: 5px;
+}
+
+.error-message {
+    color: var(--danger);
+    background-color: #ffebee;
+    padding: 10px 15px;
+    border-radius: 5px;
+    margin-bottom: 15px;
+    border-left: 4px solid var(--danger);
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Add to your existing CSS */
+.recent-transactions small {
+    color: var(--gray);
+    font-size: 0.8em;
+    display: block;
+    margin-top: 3px;
+}
+
+.charity-transaction {
+    background-color: #f8f9fa;
+}
+
+.charity-transaction td:first-child {
+    border-left: 3px solid #ff69b4;
 }
