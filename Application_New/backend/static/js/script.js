@@ -9,7 +9,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const acceptAdjustment = document.getElementById('acceptAdjustment');
     const rejectAdjustment = document.getElementById('rejectAdjustment');
     const recommendationsContainer = document.getElementById('recommendationsContainer');
-    
+    const charityBtn = document.getElementById('charityBtn');
+    const charityModal = document.getElementById('charityModal');
+    const charityForm = document.getElementById('charityForm');
+    const reallocateCheckbox = document.getElementById('reallocateCheckbox');
+    const reallocationGroup = document.getElementById('reallocationGroup');
+        
     // Close modals when clicking X
     document.querySelectorAll('.close-btn').forEach(btn => {
         btn.addEventListener('click', function() {
@@ -251,3 +256,268 @@ getForecastBtn.addEventListener('click', function() {
     // Store current suggestion for budget adjustment
     let currentSuggestion = null;
 });
+
+// Add this event listener for the charity button
+charityBtn.addEventListener('click', function() {
+    charityModal.style.display = 'block';
+    
+    // Get charity suggestion
+    fetch('/get_charity_suggestion')
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            document.getElementById('charitySuggestion').innerHTML = `
+                <div class="charity-suggestion">
+                    <p><strong>AI Suggestion:</strong> Donate $${data.suggested_amount.toFixed(2)}</p>
+                    <p>${data.message}</p>
+                    <p>We suggest reallocating from your <strong>${data.suggested_reallocation}</strong> budget</p>
+                    <button id="useSuggestion" class="btn-secondary">Use This Suggestion</button>
+                </div>
+            `;
+            
+            document.getElementById('useSuggestion').addEventListener('click', function() {
+                document.getElementById('charityAmount').value = data.suggested_amount.toFixed(2);
+                document.getElementById('reallocationCategory').value = data.suggested_reallocation;
+                document.getElementById('reallocateCheckbox').checked = true;
+                reallocationGroup.style.display = 'block';
+            });
+        } else {
+            document.getElementById('charitySuggestion').innerHTML = `
+                <p class="empty-state">${data.message || 'Could not generate suggestion'}</p>
+            `;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        document.getElementById('charitySuggestion').innerHTML = `
+            <p class="empty-state">Error getting suggestion</p>
+        `;
+    });
+});
+
+// Toggle reallocation field
+reallocateCheckbox.addEventListener('change', function() {
+    reallocationGroup.style.display = this.checked ? 'block' : 'none';
+});
+
+
+// Handle charity form submission
+
+charityForm.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const amount = parseFloat(document.getElementById('charityAmount').value);
+    const category = document.getElementById('charityCategory').value;
+    const reallocate = reallocateCheckbox.checked;
+    const reallocationCategory = reallocate ? document.getElementById('reallocationCategory').value : null;
+
+    try {
+        const response = await fetch('/process_charity', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                amount: amount,
+                category: category,
+                reallocation_category: reallocationCategory
+            })
+        });
+
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.message || 'Failed to process donation');
+        }
+
+        // THIS IS WHERE THE UPDATE GOES ↓
+        if (data.status === 'success') {
+            charityModal.style.display = 'none';
+            
+            // Update the budgets
+            if (data.updated_budgets) {
+                Object.assign(user_data.budgets, data.updated_budgets);
+                updateBudgetDisplays(data.updated_budgets);
+            }
+            
+            // Add the new transaction to the UI
+            if (data.new_transaction) {
+                addTransactionToUI(data.new_transaction);
+            }
+            
+            addRecommendation({
+                title: 'Donation Processed',
+                message: `Thank you for donating $${amount.toFixed(2)} to ${category}!` + 
+                    (reallocate ? ` Amount reallocated from ${reallocationCategory} budget.` : '')
+            });
+        } else {
+            showError(data.message || 'Error processing donation');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showError(error.message || 'An error occurred while processing donation');
+    }
+});
+// charityForm.addEventListener('submit', async function(e) {
+//     e.preventDefault();
+    
+//     const amount = parseFloat(document.getElementById('charityAmount').value);
+//     const category = document.getElementById('charityCategory').value;
+//     const reallocate = reallocateCheckbox.checked;
+//     const reallocationCategory = reallocate ? document.getElementById('reallocationCategory').value : null;
+
+//     try {
+//         const response = await fetch('/process_charity', {
+//             method: 'POST',
+//             headers: {
+//                 'Content-Type': 'application/json',
+//             },
+//             body: JSON.stringify({
+//                 amount: amount,
+//                 category: category,
+//                 reallocation_category: reallocationCategory
+//             })
+//         });
+
+//         const data = await response.json();
+        
+//         if (!response.ok) {
+//             throw new Error(data.message || 'Failed to process donation');
+//         }
+
+//         if (data.status === 'success') {
+//             charityModal.style.display = 'none';
+//             addRecommendation({
+//                 title: 'Donation Processed',
+//                 message: `Thank you for donating $${amount.toFixed(2)} to ${category}!` + 
+//                     (reallocate ? ` Amount reallocated from ${reallocationCategory} budget.` : '')
+//             });
+//             setTimeout(() => location.reload(), 1500);
+//         } else {
+//             showError(data.message || 'Error processing donation');
+//         }
+//     } catch (error) {
+//         console.error('Error:', error);
+//         showError(error.message || 'An error occurred while processing donation');
+//     }
+// });
+
+// Helper function to show errors
+function showError(message) {
+    const errorElement = document.createElement('div');
+    errorElement.className = 'error-message';
+    errorElement.textContent = message;
+    
+    // Remove any existing error messages
+    const existingErrors = document.querySelectorAll('.error-message');
+    existingErrors.forEach(err => err.remove());
+    
+    // Insert the error message above the form
+    charityForm.insertBefore(errorElement, charityForm.firstChild);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => errorElement.remove(), 5000);
+}
+
+// Handle charity form submission
+// charityForm.addEventListener('submit', function(e) {
+//     e.preventDefault();
+    
+//     const amount = parseFloat(document.getElementById('charityAmount').value);
+//     const category = document.getElementById('charityCategory').value;
+//     const reallocate = reallocateCheckbox.checked;
+//     const reallocationCategory = reallocate ? document.getElementById('reallocationCategory').value : null;
+    
+//     fetch('/process_charity', {
+//         method: 'POST',
+//         headers: {
+//             'Content-Type': 'application/json',
+//         },
+//         body: JSON.stringify({
+//             amount: amount,
+//             category: category,
+//             reallocation_category: reallocationCategory
+//         })
+//     })
+//     .then(response => response.json())
+//     .then(data => {
+//         if (data.status === 'success') {
+//             charityModal.style.display = 'none';
+//             addRecommendation({
+//                 title: 'Donation Processed',
+//                 message: `Thank you for donating $${amount.toFixed(2)} to ${category}!` + 
+//                     (reallocate ? ` Amount reallocated from ${reallocationCategory} budget.` : '')
+//             });
+//             setTimeout(() => location.reload(), 1500);
+//         } else {
+//             alert(data.message || 'Error processing donation');
+//         }
+//     })
+//     .catch(error => {
+//         console.error('Error:', error);
+//         alert('An error occurred while processing donation');
+//     });
+// });
+
+function updateBudgetDisplays(updatedBudgets) {
+    // Update all budget cards
+    document.querySelectorAll('.budget-card').forEach(card => {
+        const category = card.querySelector('h3').textContent;
+        if (updatedBudgets[category] !== undefined) {
+            const remaining = updatedBudgets[category];
+            const initial = initial_budgets[category];
+            
+            // Update the progress bar
+            const progressBar = card.querySelector('.progress-bar');
+            const percentage = Math.min(100, (remaining / initial) * 100);
+            progressBar.style.width = `${percentage}%`;
+            progressBar.style.backgroundColor = getProgressColor(percentage);
+            
+            // Update the text display
+            card.querySelector('p').textContent = 
+                `$${remaining.toFixed(2)} remaining of $${initial.toFixed(2)}`;
+        }
+    });
+}
+
+function addTransactionToUI(transaction) {
+    const tbody = document.querySelector('.recent-transactions tbody');
+    
+    // Create new row
+    const row = document.createElement('tr');
+    
+    // Add charity class if applicable
+    if (transaction.category === 'Charity') {
+        row.classList.add('charity-transaction');
+    }
+    
+    // Format amount with proper class
+    const amountClass = transaction.amount > 0 ? 'expense' : 'income';
+    const amountDisplay = `$${Math.abs(transaction.amount).toFixed(2)}`;
+    
+    // Build row HTML
+    row.innerHTML = `
+        <td>${transaction.date}</td>
+        <td>
+            ${transaction.description}
+            ${transaction.category === 'Charity' ? 
+              `<br><small>(${transaction.charity_category})</small>` : ''}
+        </td>
+        <td class="${amountClass}">${amountDisplay}</td>
+        <td>${transaction.category}</td>
+    `;
+    
+    // Add to top of table
+    tbody.insertBefore(row, tbody.firstChild);
+    
+    // Keep only the last 5 transactions
+    if (tbody.children.length > 5) {
+        tbody.removeChild(tbody.lastChild);
+    }
+}
+
+function getProgressColor(percentage) {
+    if (percentage < 30) return 'var(--danger)';
+    if (percentage < 70) return 'var(--warning)';
+    return 'var(--success)';
+}
