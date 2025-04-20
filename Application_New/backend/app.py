@@ -6,12 +6,14 @@ from transformers import pipeline
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense
 import warnings
+from sklearn.cluster import KMeans
 warnings.filterwarnings('ignore')
 
 app = Flask(__name__)
 
 # Initialize NLP classifier
 classifier = pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
+charity_categories = ['Education', 'Health', 'Environment', 'Poverty Alleviation', 'Animal Welfare']
 
 # Categories and initial budgets
 categories = ['Food', 'Transportation', 'Entertainment', 'Utilities', 'Shopping', 'Subscriptions', 'Healthcare', 'Other']
@@ -32,6 +34,7 @@ user_data = {
     'budgets': initial_budgets.copy(),
     'feedback': []
 }
+user_data['charity_history'] = []
 
 # Initialize RL model parameters
 rl_params = {
@@ -59,7 +62,8 @@ def index():
                          categories=categories,
                          budgets=user_data['budgets'],
                          initial_budgets=initial_budgets,
-                         transactions=user_data['transactions'][-5:])
+                         transactions=user_data['transactions'][-5:],
+                         charity_categories=charity_categories)
 
 @app.route('/categorize', methods=['POST'])
 def categorize_expense():
@@ -354,6 +358,115 @@ def get_forecast():
             'message': str(e),
             'transactions_count': len(user_data['transactions'])
         })
+    
+
+
+
+
+# Add this route for charity suggestions
+@app.route('/get_charity_suggestion', methods=['GET'])
+def get_charity_suggestion():
+    if len(user_data['transactions']) < 5:
+        return jsonify({
+            'status': 'not_enough_data',
+            'message': 'We need at least 5 transactions to make charity suggestions'
+        })
+    
+    # Analyze spending patterns using K-Means clustering
+    amounts = np.array([t['amount'] for t in user_data['transactions']]).reshape(-1, 1)
+    kmeans = KMeans(n_clusters=3, random_state=42).fit(amounts)
+    
+    # Get cluster centers (small, medium, large transactions)
+    clusters = sorted(kmeans.cluster_centers_.flatten())
+    
+    # Suggested charity amount is 5% of medium-sized transactions
+    suggested_amount = round(float(clusters[1] * 0.05), 2)
+    
+    # Get most underutilized budget category to suggest reallocation
+    budget_utilization = []
+    for cat in categories:
+        spent = initial_budgets[cat] - user_data['budgets'][cat]
+        utilization = spent / initial_budgets[cat]
+        budget_utilization.append((cat, utilization))
+    
+    # Sort by lowest utilization
+    budget_utilization.sort(key=lambda x: x[1])
+    suggested_reallocation = budget_utilization[0][0]
+    
+    return jsonify({
+        'status': 'success',
+        'suggested_amount': suggested_amount,
+        'suggested_categories': charity_categories,
+        'suggested_reallocation': suggested_reallocation,
+        'message': f"Based on your spending patterns, we suggest donating ${suggested_amount}"
+    })
+
+# Add to your existing imports
+from datetime import datetime, timedelta
+
+# Add with other initializations
+charity_categories = ['Education', 'Health', 'Environment', 'Poverty Alleviation', 'Animal Welfare']
+
+# Update the process_charity route
+@app.route('/process_charity', methods=['POST'])
+def process_charity():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'status': 'error', 'message': 'No data provided'}), 400
+
+        amount = float(data.get('amount', 0))
+        category = data.get('category', '').strip()
+        reallocation_category = data.get('reallocation_category', '').strip() or None
+
+        # Validate inputs
+        if amount <= 0:
+            return jsonify({'status': 'error', 'message': 'Amount must be positive'}), 400
+        
+        if not category or category not in charity_categories:
+            return jsonify({'status': 'error', 'message': 'Invalid charity category'}), 400
+
+        # Check if reallocation is needed and valid
+        if reallocation_category:
+            if reallocation_category not in categories:
+                return jsonify({'status': 'error', 'message': 'Invalid reallocation category'}), 400
+            
+            if user_data['budgets'].get(reallocation_category, 0) < amount:
+                return jsonify({
+                    'status': 'error',
+                    'message': f'Not enough budget in {reallocation_category} to reallocate'
+                }), 400
+            
+            # Perform reallocation
+            user_data['budgets'][reallocation_category] -= amount
+
+        # Record charity donation as both charity and transaction
+        donation = {
+            'date': datetime.now().strftime('%Y-%m-%d'),
+            'description': f"Donation to {category}",
+            'amount': -amount,  # Negative amount for display purposes
+            'category': 'Charity',
+            'charity_category': category,
+            'reallocation_category': reallocation_category,
+            'confidence': 1.0
+        }
+        user_data['charity_history'].append(donation)
+        user_data['transactions'].append(donation)
+
+        return jsonify({
+            'status': 'success',
+            'donation': donation,
+            'updated_budgets': user_data['budgets'],
+            'new_transaction': donation,
+            'message': 'Thank you for your donation!'
+        })
+
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': f'An error occurred: {str(e)}'
+        }), 500
+
 
 if __name__ == '__main__':
     app.run(debug=True)
